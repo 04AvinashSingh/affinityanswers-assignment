@@ -24,45 +24,49 @@ def scrape_mdcomputers(search_term):
             print("Note: Bypassing this would require advanced tools like cloudscraper or Playwright.")
             return
         response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        print(f"Failed to fetch data: {e}")
+        return
 
-        soup = BeautifulSoup(response.text, "html.parser")
-        products = soup.select(".product-layout")
+    soup = BeautifulSoup(response.text, 'html.parser')
+    
+    # The standard product container class in MDComputers (OpenCart)
+    products = soup.find_all('div', class_='product-layout')
+    
+    if not products:
+        print("No products found or the HTML structure has changed.")
+        return
 
-        if not products:
-            print("No products found.")
-            return
-
-        for idx, product in enumerate(products, 1):
-            try:
-                name_elem = product.select_one(".caption h4 a")
-                name = name_elem.text.strip() if name_elem else "N/A"
-            except Exception:
-                name = "N/A"
-
-            try:
-                price_elem = product.select_one(".price")
-                price = price_elem.text.strip() if price_elem else "N/A"
-            except Exception:
-                price = "N/A"
-
-            try:
-                link_elem = product.select_one(".caption h4 a")
-                link = link_elem["href"] if link_elem and "href" in link_elem.attrs else "N/A"
-            except Exception:
-                link = "N/A"
-
-            print("=" * 60)
-            print(f"Product {idx}:")
-            print("Name :", name)
-            print("Price:", price)
-            print("Link :", link)
-
-    except requests.RequestException as e:
-        print(f"Request error occurred: {e}")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-
+    print(f"Found {len(products)} products on the first page.\n")
+    print("-" * 80)
+    
+    for idx, product in enumerate(products, 1):
+        name_elem = product.find('div', class_='name')
+        if name_elem and name_elem.find('a'):
+            a_tag = name_elem.find('a')
+            name = a_tag.text.strip()
+            link = a_tag.get('href', '')
+        else:
+            name, link = "Unknown Name", ""
+        
+        # Extract product price (handling discounts vs regular prices)
+        price_elem = product.find('span', class_='price-new')
+        if not price_elem:
+            price_elem = product.find('div', class_='price')
+            if price_elem:
+                # Remove tax text if present inside the price div
+                for span in price_elem.find_all('span', class_='price-tax'):
+                    span.decompose()
+        
+        price = price_elem.text.strip() if price_elem else "Price not available"
+        
+        print(f"{idx}. {name}")
+        print(f"   Price: {price}")
+        print(f"   Link: {link}")
+        print("-" * 80)
 
 if __name__ == "__main__":
-    term = " ".join(sys.argv[1:]) if len(sys.argv) > 1 else "external harddrive"
+    term = "external harddrive"
+    if len(sys.argv) > 1:
+        term = " ".join(sys.argv[1:])
     scrape_mdcomputers(term)
